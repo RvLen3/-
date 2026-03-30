@@ -7,7 +7,7 @@ import shutil
 import threading
 from pathlib import Path
 
-
+Threshold = 0.8
 YYS_PACKAGE = "com.netease.onmyoji.wyzymnqsd_cps"
 ADB_CANDIDATES = [
     r"D:/Program Files/Netease/MuMu/nx_main/adb.exe",
@@ -137,13 +137,14 @@ def open_yys(port=16384, host="127.0.0.1", timeout=60):
 
     logging.info(f"[INFO] ====== Onmyoji launch command sent: {YYS_PACKAGE} ======")
 
-    clicked = wait_and_click_login(
+    clicked = wait_and_click(
         port=port,
         host=host,
         template_path="imgs/login.png", 
         timeout=90,
         interval=2,
         screenshot_path=LIVE_SCREENSHOT_PATH,
+        decay = 3.0 # wait for 3 seconds after detecting login screen before tapping, to allow UI to stabilize
     )
     if not clicked:
         logging.warning("[WARN] ====== login target not detected within timeout ======")
@@ -223,7 +224,7 @@ def stop_screenshot_loop():
     logging.info("[INFO] screenshot loop stopped")
 
 
-def wait_and_click_login(port=16384, host="127.0.0.1", template_path="assets/login_screen.png", timeout=90, interval=2, screenshot_path=LIVE_SCREENSHOT_PATH):
+def wait_and_click(port=16384, host="127.0.0.1", template_path="imgs/login.png", timeout=90, interval=2, screenshot_path=LIVE_SCREENSHOT_PATH, decay=0):
     deadline = time.monotonic() + timeout
 
     while time.monotonic() < deadline:
@@ -234,19 +235,26 @@ def wait_and_click_login(port=16384, host="127.0.0.1", template_path="assets/log
         match = compute_location(template_path, screenshot_path)
         if match:
             x, y, score = match
+            time.sleep(decay)  # Optional delay to allow UI to stabilize
             logging.info(f"[INFO] login target detected at ({x}, {y}), confidence={score:.3f}")
             if adb_tap(x, y, port=port, host=host):
-                logging.info("[INFO] ====== login tapped ======")
+                logging.info("[INFO] ====== successful tap ======")
                 return True
 
-            logging.warning("[WARN] login target detected but tap failed, retrying...")
+            logging.warning("[WARN] target detected but tap failed, retrying...")
 
         time.sleep(interval)
 
     return False
 
 
-def compute_location(image1, image2):
+def compute_location(image1, image2, location="center"):
+    '''
+    params:
+    image1: template image path or cv2 image object
+    image2: target image path or cv2 image object
+    location: "center" or "top" or "bottom" or "left" or "right", determines the coordinate returned (center of matched
+    '''
     try:
         import cv2
     except ImportError:
@@ -297,3 +305,27 @@ def check_breakthrough():
 
 def restart():
     pass
+
+# choose your lineup
+def choose_lineup(lineup=(0,0)):
+    pass
+
+# pickup your bonus
+def pickup_bonus(use_bonus=(False,False,False,False)):
+    '''params:
+    soul,awaken,money,exp'''
+    x, y ,score = compute_location("imgs/bonus.png", LIVE_SCREENSHOT_PATH)
+    if score < Threshold:
+        logging.warning("[WARN] bonus pickup target not detected with high confidence")
+        return False
+    adb_tap(x,y) # click bonus entry    
+    if use_bonus[0]: # soul
+        
+    if use_bonus[1]: # awaken
+        adb_tap(x-100,y)
+    if use_bonus[2]: # money
+        adb_tap(x,y)
+    if use_bonus[3]: # exp
+        adb_tap(x+100,y)
+    return True
+    
